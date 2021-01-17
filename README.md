@@ -1,5 +1,5 @@
 # diffusion-image-segmentation
-Build and run:
+Build and run for Windows 10:
 
 0. [Download](https://sourceforge.net/projects/opencvlibrary/files/opencv-win/) prebuild opencv library  
 1. In the root folder run ```mkdir build && cd build```
