@@ -9,6 +9,7 @@
 
 
 struct EdgeCost {
+private:
     float costs[4];
 public:
     EdgeCost(float alpha) {
@@ -22,22 +23,40 @@ public:
         return this->costs[k1 * 2 + k2];
     }
 
-    ~EdgeCost() {
-
-    }
+    ~EdgeCost() = default;
 };
 
-int getK(int k, Phi &phi, int i, int j, int ni, int nj, int neighbor, int neighborIndex, EdgeCost& edgeCostTable);
+struct NodeCost {
+public:
+    NodeCost(const cv::Mat &image, const std::vector<cv::Vec3b> &colours) {
+        this->height = image.size().height;
+        this->width = image.size().width;
+        this->ks = colours.size();
+        costs = std::vector<float>(height * width * ks);
+        for(int i = 0; i < height; ++i) {
+            for(int j = 0; j < width; ++j) {
+                for(int k = 0; k < ks; ++k) {
+                    float c = cv::norm(colours[k], image.at<cv::Vec3b>(i,j));
+                    float ci = cv::norm(colours[k ^ 1], image.at<cv::Vec3b>(i,j));
+                    costs[k  + j * ks + ks * width * i] = c < ci ? 1.0 : 0.0;
+                }
+            }
+        }
+    }
 
-float nodeCost(int k, const cv::Vec3b &pixelValue, const std::vector<cv::Vec3b> &segmentsColour) {
-    int c = abs(segmentsColour[k][0] - pixelValue[0]) 
-        + abs(segmentsColour[k][1] - pixelValue[1]) 
-        + abs(segmentsColour[k][2] - pixelValue[2]);
-    int ci = abs(segmentsColour[k ^ 1][0] - pixelValue[0]) 
-        + abs(segmentsColour[k ^ 1][1] - pixelValue[1]) 
-        + abs(segmentsColour[k ^ 1][2] - pixelValue[2]);
-    return c < ci ? 1.0 : 0.0;
-}
+    float operator()(int i, int j, int k) {
+        return costs[k  + j * ks + ks * width * i];
+    }
+
+private:
+    std::vector<float> costs;
+    int width;
+    int height;
+    int ks;
+};
+
+
+int getK(int k, Phi &phi, int i, int j, int ni, int nj, int neighbor, int neighborIndex, EdgeCost& edgeCostTable);
 
 cv::Mat diffusionAlgorithm(const cv::Mat &image, float alpha, const std::vector<cv::Vec3b> &colorSegments, int iters) {
     int neihborsQ = 4;
@@ -46,6 +65,7 @@ cv::Mat diffusionAlgorithm(const cv::Mat &image, float alpha, const std::vector<
     auto imageSize = image.size();
     Phi phi(ks, imageSize.width, imageSize.height, neihborsQ);
     EdgeCost edgeCostTable(alpha);
+    NodeCost nodeCostTable(image, colorSegments);
     auto neighbors = NeighborStruct(imageSize);
     TimeMeasurement time;
     for(int it = 0; it < iters; ++it) {
@@ -65,7 +85,7 @@ cv::Mat diffusionAlgorithm(const cv::Mat &image, float alpha, const std::vector<
                         }
                         
                     }
-                    C = (C + nodeCost(k1, image.at<cv::Vec3b>(i, j), colorSegments)) / neighbors.getNT();
+                    C = (C + nodeCostTable(i, j, k1)) / neighbors.getNT();
                     for(int n = 0; n < neihborsQ; ++n) {
                         auto neighbor = neighbors[n];
                         if(neighbors.isAllowedNeighbor(neighbor[0], neighbor[1])) {
